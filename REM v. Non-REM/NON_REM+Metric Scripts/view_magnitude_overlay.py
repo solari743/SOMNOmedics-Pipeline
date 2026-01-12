@@ -13,13 +13,11 @@
 import pandas as pd, matplotlib.pyplot as plt, datetime, re, h5py, numpy as np
 from scipy.signal import butter, filtfilt
 
-# === 1. CONFIG ===
 filename  = r'Patient-Data/DATASET - HIGH RISK 02/High_Risk02 [RAW MOVEMENT]/highrisk02_20240820-141937.h5'
 targetID  = 'XI-016162'
 sleep_file = r'Patient-Data/DATASET - HIGH RISK 02/High_Risk02 [CHILD TEMPLATE]/Sleep profile - HighRisk.txt'
 
 
-# === 2. PARSE SLEEP START TIME ===
 file_date = None
 start_clock_time = None
 with open(sleep_file, 'r', errors='ignore') as f:
@@ -43,7 +41,6 @@ if file_date is None:
 sleep_start_dt = datetime.datetime.combine(file_date, start_clock_time or datetime.time(0,0,0))
 
 
-# === 3. LOAD SLEEP STATES ===
 sleep_data = []
 with open(sleep_file, 'r', errors='ignore') as f:
     for line in f:
@@ -62,7 +59,6 @@ wake_df = sleep_df[sleep_df['state'].str.lower() == 'wake']
 if wake_df.empty: raise ValueError("No wake periods found in sleep profile.")
 
 
-# === 4. LOAD & CLEAN ACCELEROMETER DATA ===
 with h5py.File(filename,'r') as f:
     base=f"Sensors/{targetID}"
     acc_data=np.array(f[f'{base}/Accelerometer'][:],dtype=np.float64)
@@ -71,7 +67,7 @@ with h5py.File(filename,'r') as f:
 
 acc_df=pd.DataFrame(acc_data,columns=['ax','ay','az'],index=pd.to_datetime(time_dt))
 
-# --- Cleaning Steps ---
+
 acc_df['mag']=np.sqrt(acc_df['ax']**2+acc_df['ay']**2+acc_df['az']**2)
 acc_df['mag']=acc_df['mag'].clip(lower=acc_df['mag'].quantile(0.01),
                                  upper=acc_df['mag'].quantile(0.99))
@@ -85,11 +81,9 @@ acc_df['mag']=butter_lowpass_filter(acc_df['mag'].interpolate(),cutoff=3,fs=50)
 acc_df.dropna(inplace=True)
 
 
-# === 5. COMPUTE MEAN MAGNITUDE (30s Epochs) ===
 mag_30s=acc_df['mag'].resample('30s').mean().dropna()
 
 
-# === 6. DETERMINE WAKE SEGMENTS ===
 wake_df = wake_df.copy()
 wake_df['gap'] = (wake_df.index.to_series().diff() > pd.Timedelta('40s')).cumsum()
 wake_blocks = (
@@ -100,13 +94,10 @@ wake_blocks = (
 )
 
 
-# === 7. VISUALIZE ONE CONTINUOUS TIMELINE ===
 fig, ax = plt.subplots(figsize=(15,7))
 
-# Plot mean magnitude over time
 ax.plot(mag_30s.index, mag_30s.values, color='blue', lw=1.5, label='Mean Acceleration Magnitude (m/s²)')
 
-# Overlay orange Wake spans + labeled start boundaries
 for _, row in wake_blocks.iterrows():
     start, end = row['start_time'], row['end_time']
     ax.axvspan(start, end, color='orange', alpha=0.2)
@@ -121,7 +112,6 @@ plt.tight_layout()
 plt.show()
 
 
-# === 8. SUMMARY ===
 total_duration = (mag_30s.index[-1] - mag_30s.index[0])
 print("\n--- Wake Magnitude Summary ---")
 print(f"Total analyzed duration: {total_duration}")

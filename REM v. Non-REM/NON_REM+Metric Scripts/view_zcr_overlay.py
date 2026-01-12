@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import datetime, re, h5py, numpy as np
 from matplotlib.widgets import Slider
 
-# === CONFIG ===
+
 filename   = r'Patient-Data/DATASET - HIGH RISK 02/High_Risk02 [RAW MOVEMENT]/highrisk02_20240820-141937.h5'
 targetID   = 'XI-016162'
 sleep_file = r'Patient-Data/DATASET - HIGH RISK 02/High_Risk02 [CHILD TEMPLATE]/Sleep profile - HighRisk.txt'
 
-# === 1. PARSE SLEEP START TIME ===
+
 file_date = None
 start_clock_time = None
 with open(sleep_file, 'r', errors='ignore') as f:
@@ -35,7 +35,7 @@ if file_date is None:
     raise ValueError("Recording date could not be parsed from sleep file.")
 sleep_start_dt = datetime.datetime.combine(file_date, start_clock_time or datetime.time(0, 0, 0))
 
-# === 2. LOAD SLEEP STATES ===
+
 sleep_data = []
 with open(sleep_file, 'r', errors='ignore') as f:
     for line in f:
@@ -62,7 +62,7 @@ epoch_df['sleep_state'] = epoch_df['sleep_state'].fillna('Unknown')
 
 wake_df = sleep_df[sleep_df['state'].str.lower() == 'wake'].copy()
 
-# === 3. LOAD H5 ACCEL DATA ===
+
 with h5py.File(filename, 'r') as f:
     if targetID not in f['Sensors']:
         raise KeyError(f"Sensor ID {targetID} not found in file")
@@ -74,7 +74,7 @@ with h5py.File(filename, 'r') as f:
 acc_df = pd.DataFrame(acc_data, columns=['ax', 'ay', 'az'], index=pd.to_datetime(time_dt))
 sig = acc_df['ax']  # you can switch to 'mag' if you want combined 3-axis activity
 
-# === 4. COMPUTE CONTINUOUS ZCR ===
+
 def zcr_window(x):
     if len(x) < 2:
         return np.nan
@@ -82,7 +82,7 @@ def zcr_window(x):
     x[x == 0] = 1
     return np.mean(x[:-1] != np.roll(x, -1)[:-1])
 
-# estimate sampling rate
+
 sr_est = 1 / sig.index.to_series().diff().dt.total_seconds().median()
 if not np.isfinite(sr_est) or sr_est == 0:
     sr_est = 50  # fallback
@@ -90,11 +90,11 @@ if not np.isfinite(sr_est) or sr_est == 0:
 window_s = 5  # seconds per window
 samples_per_window = int(sr_est * window_s)
 
-# rolling ZCR (every few seconds)
+
 zcr_series = sig.rolling(samples_per_window, min_periods=2).apply(zcr_window, raw=False)
 zcr_series = zcr_series.resample('1s').mean().fillna(method='ffill')
 
-# === 5. PLOT ===
+
 fig, ax = plt.subplots(figsize=(15, 7))
 plt.subplots_adjust(bottom=0.25)
 ax_slider = plt.axes([0.15, 0.1, 0.7, 0.03])
